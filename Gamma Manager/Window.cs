@@ -24,6 +24,10 @@ namespace Gamma_Manager
         bool greenColor = false;
         bool blueColor = false;
 
+        // Hotkey management
+        private HotkeyManager hotkeyManager;
+        private Dictionary<string, HotkeyConfigForm.HotkeyConfig> hotkeyConfigs;
+
         private void clearColors()
         {
             buttonAllColors.Font = new Font(buttonAllColors.Font.Name, buttonAllColors.Font.Size, FontStyle.Regular);
@@ -61,6 +65,9 @@ namespace Gamma_Manager
 
             ToolStripMenuItem toolSetting = new ToolStripMenuItem("Settings", null, toolSettings_Click);
             contextMenu.Items.Add(toolSetting);
+
+            ToolStripMenuItem toolHotkeys = new ToolStripMenuItem("Configure Hotkeys", null, toolHotkeys_Click);
+            contextMenu.Items.Add(toolHotkeys);
 
             ToolStripSeparator toolStripSeparator1 = new ToolStripSeparator();
             contextMenu.Items.Add(toolStripSeparator1);
@@ -179,6 +186,12 @@ namespace Gamma_Manager
 
             initTrayMenu();
             notifyIcon.ContextMenuStrip = contextMenu;
+
+            // Initialize hotkey manager
+            hotkeyConfigs = new Dictionary<string, HotkeyConfigForm.HotkeyConfig>();
+            hotkeyManager = new HotkeyManager(this.Handle);
+            LoadHotkeyConfigs();
+            RegisterAllHotkeys();
         }
 
         private void trackBarGamma_ValueChanged(object sender, EventArgs e)
@@ -696,5 +709,432 @@ namespace Gamma_Manager
         }
 
         //destroy focuses on buttons, trackbars, comboboxes, text, checkbox
+
+        #region Hotkey Functions
+
+        /// <summary>
+        /// Override WndProc to handle hotkey messages
+        /// </summary>
+        protected override void WndProc(ref Message m)
+        {
+            if (hotkeyManager != null && hotkeyManager.ProcessHotkey(m))
+            {
+                return; // Hotkey handled
+            }
+            base.WndProc(ref m);
+        }
+
+        /// <summary>
+        /// Load hotkey configurations from INI file
+        /// </summary>
+        private void LoadHotkeyConfigs()
+        {
+            hotkeyConfigs.Clear();
+            string[] presets = iniFile.GetSections();
+
+            if (presets != null)
+            {
+                foreach (string preset in presets)
+                {
+                    string modifiersStr = iniFile.Read("hotkeyModifiers", preset);
+                    string keyStr = iniFile.Read("hotkeyKey", preset);
+
+                    if (!string.IsNullOrEmpty(modifiersStr) && !string.IsNullOrEmpty(keyStr))
+                    {
+                        try
+                        {
+                            uint modifiers = uint.Parse(modifiersStr);
+                            Keys key = (Keys)Enum.Parse(typeof(Keys), keyStr);
+
+                            hotkeyConfigs[preset] = new HotkeyConfigForm.HotkeyConfig(modifiers, key);
+                        }
+                        catch
+                        {
+                            // Invalid hotkey config, skip
+                        }
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// Save hotkey configurations to INI file
+        /// </summary>
+        private void SaveHotkeyConfigs()
+        {
+            foreach (var kvp in hotkeyConfigs)
+            {
+                string preset = kvp.Key;
+                var config = kvp.Value;
+
+                iniFile.Write("hotkeyModifiers", config.Modifiers.ToString(), preset);
+                iniFile.Write("hotkeyKey", config.Key.ToString(), preset);
+            }
+        }
+
+        /// <summary>
+        /// Register all configured hotkeys
+        /// </summary>
+        private void RegisterAllHotkeys()
+        {
+            if (hotkeyManager == null) return;
+
+            hotkeyManager.UnregisterAllHotkeys();
+
+            foreach (var kvp in hotkeyConfigs)
+            {
+                string presetName = kvp.Key;
+                var config = kvp.Value;
+
+                hotkeyManager.RegisterPresetHotkey(presetName, config.Modifiers, config.Key, () =>
+                {
+                    // This will be called when hotkey is pressed
+                    ApplyPreset(presetName);
+                });
+            }
+        }
+
+        /// <summary>
+        /// Apply a preset configuration
+        /// </summary>
+        private void ApplyPreset(string presetName)
+        {
+            try
+            {
+                // Find which display this preset belongs to
+                string monitorName = iniFile.Read("monitor", presetName);
+
+                if (string.IsNullOrEmpty(monitorName))
+                    return;
+
+                // Find the display index
+                int displayIndex = -1;
+                for (int i = 0; i < displays.Count; i++)
+                {
+                    if (displays[i].displayName.Equals(monitorName))
+                    {
+                        displayIndex = i;
+                        break;
+                    }
+                }
+
+                if (displayIndex == -1)
+                    return;
+
+                // Switch to the display if different
+                if (displayIndex != numDisplay)
+                {
+                    numDisplay = displayIndex;
+                    currDisplay = displays[numDisplay];
+                    comboBoxMonitors.SelectedIndex = numDisplay;
+                }
+
+                // Load preset values
+                currDisplay.rGamma = float.Parse(iniFile.Read("rGamma", presetName), customCulture);
+                currDisplay.gGamma = float.Parse(iniFile.Read("gGamma", presetName), customCulture);
+                currDisplay.bGamma = float.Parse(iniFile.Read("bGamma", presetName), customCulture);
+                currDisplay.rContrast = float.Parse(iniFile.Read("rContrast", presetName), customCulture);
+                currDisplay.gContrast = float.Parse(iniFile.Read("gContrast", presetName), customCulture);
+                currDisplay.bContrast = float.Parse(iniFile.Read("bContrast", presetName), customCulture);
+                currDisplay.rBright = float.Parse(iniFile.Read("rBright", presetName), customCulture);
+                currDisplay.gBright = float.Parse(iniFile.Read("gBright", presetName), customCulture);
+                currDisplay.bBright = float.Parse(iniFile.Read("bBright", presetName), customCulture);
+
+                string monitorBrightnessStr = iniFile.Read("monitorBrightness", presetName);
+                string monitorContrastStr = iniFile.Read("monitorContrast", presetName);
+
+                if (!string.IsNullOrEmpty(monitorBrightnessStr))
+                    currDisplay.monitorBrightness = int.Parse(monitorBrightnessStr);
+
+                if (!string.IsNullOrEmpty(monitorContrastStr))
+                    currDisplay.monitorContrast = int.Parse(monitorContrastStr);
+
+                // Apply the settings
+                fillInfo(currDisplay);
+                clearColors();
+                buttonAllColors.PerformClick();
+
+                // Apply gamma ramp
+                Gamma.SetGammaRamp(currDisplay.displayLink,
+                    Gamma.CreateGammaRamp(currDisplay.rGamma, currDisplay.gGamma, currDisplay.bGamma,
+                    currDisplay.rContrast, currDisplay.gContrast, currDisplay.bContrast,
+                    currDisplay.rBright, currDisplay.gBright, currDisplay.bBright));
+
+                // Apply monitor brightness/contrast
+                if (currDisplay.isExternal)
+                {
+                    if (currDisplay.monitorBrightness > 0)
+                        ExternalMonitor.SetBrightness(currDisplay.PhysicalHandle, (uint)currDisplay.monitorBrightness);
+                    if (currDisplay.monitorContrast > 0)
+                        ExternalMonitor.SetContrast(currDisplay.PhysicalHandle, (uint)currDisplay.monitorContrast);
+                }
+                else
+                {
+                    if (currDisplay.monitorBrightness > 0)
+                        InternalMonitor.SetBrightness((byte)currDisplay.monitorBrightness);
+                }
+
+                // Update preset selection
+                comboBoxPresets.Text = presetName;
+
+                // Show notification
+                notifyIcon.ShowBalloonTip(1000, "Preset Applied", $"Applied: {presetName}", ToolTipIcon.Info);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error applying preset: {ex.Message}", "Error",
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        /// <summary>
+        /// Menu handler for hotkey configuration
+        /// </summary>
+        private void toolHotkeys_Click(object sender, EventArgs e)
+        {
+            // Get all available presets
+            List<string> allPresets = new List<string>();
+            string[] presets = iniFile.GetSections();
+
+            if (presets != null)
+            {
+                allPresets.AddRange(presets);
+            }
+
+            if (allPresets.Count == 0)
+            {
+                MessageBox.Show("No presets found. Please create some presets first.", "Info",
+                    MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            // Show hotkey configuration dialog
+            using (var hotkeyForm = new HotkeyConfigForm(allPresets, hotkeyConfigs))
+            {
+                if (hotkeyForm.ShowDialog() == DialogResult.OK)
+                {
+                    hotkeyConfigs = hotkeyForm.HotkeyConfigs;
+                    SaveHotkeyConfigs();
+                    RegisterAllHotkeys();
+
+                    MessageBox.Show("Hotkeys have been updated and are now active!", "Success",
+                        MessageBoxButtons.OK, MessageBoxIcon.Information);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Clean up hotkeys when form closes
+        /// </summary>
+        protected override void OnFormClosing(FormClosingEventArgs e)
+        {
+            if (hotkeyManager != null)
+            {
+                hotkeyManager.Dispose();
+            }
+            base.OnFormClosing(e);
+        }
+
+        #endregion
+
+        #region TextBox Input Handlers
+
+        /// <summary>
+        /// Handle Gamma textbox input
+        /// </summary>
+        private void textBoxGamma_KeyPress(object sender, KeyPressEventArgs e)
+        {
+            // Allow numbers, decimal separators (both . and ,), backspace, and enter
+            if (!char.IsControl(e.KeyChar) && !char.IsDigit(e.KeyChar) && e.KeyChar != '.' && e.KeyChar != ',')
+            {
+                e.Handled = true;
+                return;
+            }
+
+            // Only allow one decimal separator
+            if ((e.KeyChar == '.' || e.KeyChar == ',') &&
+                ((sender as TextBox).Text.IndexOf('.') > -1 || (sender as TextBox).Text.IndexOf(',') > -1))
+            {
+                e.Handled = true;
+                return;
+            }
+
+            // Process on Enter key
+            if (e.KeyChar == (char)Keys.Enter)
+            {
+                e.Handled = true;
+
+                // Replace . with , to match customCulture format
+                string inputText = textBoxGamma.Text.Replace('.', ',');
+
+                if (float.TryParse(inputText, System.Globalization.NumberStyles.Float, customCulture, out float value))
+                {
+                    // Clamp value between min and max
+                    float minValue = trackBarGamma.Minimum / 100f;
+                    float maxValue = trackBarGamma.Maximum / 100f;
+                    value = Math.Max(minValue, Math.Min(maxValue, value));
+
+                    // Update trackbar - this will trigger ValueChanged which updates TextBox and applies Gamma
+                    trackBarGamma.Value = (int)(value * 100f);
+                }
+                else
+                {
+                    // Reset to current value if invalid
+                    textBoxGamma.Text = ((float)trackBarGamma.Value / 100f).ToString("0.00");
+                }
+            }
+        }
+
+        /// <summary>
+        /// Handle Contrast textbox input
+        /// </summary>
+        private void textBoxContrast_KeyPress(object sender, KeyPressEventArgs e)
+        {
+            if (!char.IsControl(e.KeyChar) && !char.IsDigit(e.KeyChar) && e.KeyChar != '.' && e.KeyChar != ',')
+            {
+                e.Handled = true;
+                return;
+            }
+
+            if ((e.KeyChar == '.' || e.KeyChar == ',') &&
+                ((sender as TextBox).Text.IndexOf('.') > -1 || (sender as TextBox).Text.IndexOf(',') > -1))
+            {
+                e.Handled = true;
+                return;
+            }
+
+            if (e.KeyChar == (char)Keys.Enter)
+            {
+                e.Handled = true;
+
+                // Replace . with , to match customCulture format
+                string inputText = textBoxContrast.Text.Replace('.', ',');
+
+                if (float.TryParse(inputText, System.Globalization.NumberStyles.Float, customCulture, out float value))
+                {
+                    float minValue = trackBarContrast.Minimum / 100f;
+                    float maxValue = trackBarContrast.Maximum / 100f;
+                    value = Math.Max(minValue, Math.Min(maxValue, value));
+
+                    // Update trackbar - this will trigger ValueChanged which updates TextBox and applies Contrast
+                    trackBarContrast.Value = (int)(value * 100f);
+                }
+                else
+                {
+                    textBoxContrast.Text = ((float)trackBarContrast.Value / 100f).ToString("0.00");
+                }
+            }
+        }
+
+        /// <summary>
+        /// Handle Brightness textbox input
+        /// </summary>
+        private void textBoxBrightness_KeyPress(object sender, KeyPressEventArgs e)
+        {
+            // Allow minus sign only at the beginning
+            if (e.KeyChar == '-')
+            {
+                if ((sender as TextBox).SelectionStart != 0 || (sender as TextBox).Text.Contains("-"))
+                {
+                    e.Handled = true;
+                    return;
+                }
+            }
+
+            if (!char.IsControl(e.KeyChar) && !char.IsDigit(e.KeyChar) && e.KeyChar != '.' && e.KeyChar != ',' && e.KeyChar != '-')
+            {
+                e.Handled = true;
+                return;
+            }
+
+            if ((e.KeyChar == '.' || e.KeyChar == ',') &&
+                ((sender as TextBox).Text.IndexOf('.') > -1 || (sender as TextBox).Text.IndexOf(',') > -1))
+            {
+                e.Handled = true;
+                return;
+            }
+
+            if (e.KeyChar == (char)Keys.Enter)
+            {
+                e.Handled = true;
+
+                // Replace . with , to match customCulture format
+                string inputText = textBoxBrightness.Text.Replace('.', ',');
+
+                if (float.TryParse(inputText, System.Globalization.NumberStyles.Float, customCulture, out float value))
+                {
+                    float minValue = trackBarBrightness.Minimum / 100f;
+                    float maxValue = trackBarBrightness.Maximum / 100f;
+                    value = Math.Max(minValue, Math.Min(maxValue, value));
+
+                    // Update trackbar - this will trigger ValueChanged which updates TextBox and applies Brightness
+                    trackBarBrightness.Value = (int)(value * 100f);
+                }
+                else
+                {
+                    textBoxBrightness.Text = ((float)trackBarBrightness.Value / 100f).ToString("0.00");
+                }
+            }
+        }
+
+        /// <summary>
+        /// Handle Monitor Brightness textbox input
+        /// </summary>
+        private void textBoxMonitorBrightness_KeyPress(object sender, KeyPressEventArgs e)
+        {
+            if (!char.IsControl(e.KeyChar) && !char.IsDigit(e.KeyChar))
+            {
+                e.Handled = true;
+                return;
+            }
+
+            if (e.KeyChar == (char)Keys.Enter)
+            {
+                e.Handled = true;
+
+                if (int.TryParse(textBoxMonitorBrightness.Text, out int value))
+                {
+                    value = Math.Max(trackBarMonitorBrightness.Minimum, Math.Min(trackBarMonitorBrightness.Maximum, value));
+
+                    // Update trackbar - this will trigger ValueChanged which updates TextBox and applies Monitor Brightness
+                    trackBarMonitorBrightness.Value = value;
+                }
+                else
+                {
+                    textBoxMonitorBrightness.Text = trackBarMonitorBrightness.Value.ToString();
+                }
+            }
+        }
+
+        /// <summary>
+        /// Handle Monitor Contrast textbox input
+        /// </summary>
+        private void textBoxMonitorContrast_KeyPress(object sender, KeyPressEventArgs e)
+        {
+            if (!char.IsControl(e.KeyChar) && !char.IsDigit(e.KeyChar))
+            {
+                e.Handled = true;
+                return;
+            }
+
+            if (e.KeyChar == (char)Keys.Enter)
+            {
+                e.Handled = true;
+
+                if (int.TryParse(textBoxMonitorContrast.Text, out int value))
+                {
+                    value = Math.Max(trackBarMonitorContrast.Minimum, Math.Min(trackBarMonitorContrast.Maximum, value));
+
+                    // Update trackbar - this will trigger ValueChanged which updates TextBox and applies Monitor Contrast
+                    trackBarMonitorContrast.Value = value;
+                }
+                else
+                {
+                    textBoxMonitorContrast.Text = trackBarMonitorContrast.Value.ToString();
+                }
+            }
+        }
+
+        #endregion
     }
 }

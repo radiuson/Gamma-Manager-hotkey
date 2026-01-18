@@ -191,31 +191,31 @@
             this.trackBarBrightness.ValueChanged += new System.EventHandler(this.trackBarBrightness_ValueChanged);
             // 
             // textBoxGamma
-            // 
+            //
             this.textBoxGamma.Location = new System.Drawing.Point(338, 5);
             this.textBoxGamma.Name = "textBoxGamma";
-            this.textBoxGamma.ReadOnly = true;
             this.textBoxGamma.Size = new System.Drawing.Size(43, 22);
             this.textBoxGamma.TabIndex = 11;
             this.textBoxGamma.TextAlign = System.Windows.Forms.HorizontalAlignment.Center;
+            this.textBoxGamma.KeyPress += new System.Windows.Forms.KeyPressEventHandler(this.textBoxGamma_KeyPress);
             // 
             // textBoxContrast
-            // 
+            //
             this.textBoxContrast.Location = new System.Drawing.Point(338, 65);
             this.textBoxContrast.Name = "textBoxContrast";
-            this.textBoxContrast.ReadOnly = true;
             this.textBoxContrast.Size = new System.Drawing.Size(43, 22);
             this.textBoxContrast.TabIndex = 12;
             this.textBoxContrast.TextAlign = System.Windows.Forms.HorizontalAlignment.Center;
+            this.textBoxContrast.KeyPress += new System.Windows.Forms.KeyPressEventHandler(this.textBoxContrast_KeyPress);
             // 
             // textBoxBrightness
-            // 
+            //
             this.textBoxBrightness.Location = new System.Drawing.Point(338, 35);
             this.textBoxBrightness.Name = "textBoxBrightness";
-            this.textBoxBrightness.ReadOnly = true;
             this.textBoxBrightness.Size = new System.Drawing.Size(43, 22);
             this.textBoxBrightness.TabIndex = 13;
             this.textBoxBrightness.TextAlign = System.Windows.Forms.HorizontalAlignment.Center;
+            this.textBoxBrightness.KeyPress += new System.Windows.Forms.KeyPressEventHandler(this.textBoxBrightness_KeyPress);
             // 
             // labelGamma
             // 
@@ -264,13 +264,13 @@
             this.labelMonitorBrightnessUp.Text = "Monitor";
             // 
             // textBoxMonitorBrightness
-            // 
+            //
             this.textBoxMonitorBrightness.Location = new System.Drawing.Point(338, 140);
             this.textBoxMonitorBrightness.Name = "textBoxMonitorBrightness";
-            this.textBoxMonitorBrightness.ReadOnly = true;
             this.textBoxMonitorBrightness.Size = new System.Drawing.Size(43, 22);
             this.textBoxMonitorBrightness.TabIndex = 19;
             this.textBoxMonitorBrightness.TextAlign = System.Windows.Forms.HorizontalAlignment.Center;
+            this.textBoxMonitorBrightness.KeyPress += new System.Windows.Forms.KeyPressEventHandler(this.textBoxMonitorBrightness_KeyPress);
             // 
             // trackBarMonitorBrightness
             // 
@@ -334,13 +334,13 @@
             this.trackBarMonitorContrast.ValueChanged += new System.EventHandler(this.trackBarMonitorContrast_ValueChanged);
             // 
             // textBoxMonitorContrast
-            // 
+            //
             this.textBoxMonitorContrast.Location = new System.Drawing.Point(338, 174);
             this.textBoxMonitorContrast.Name = "textBoxMonitorContrast";
-            this.textBoxMonitorContrast.ReadOnly = true;
             this.textBoxMonitorContrast.Size = new System.Drawing.Size(43, 22);
             this.textBoxMonitorContrast.TabIndex = 27;
             this.textBoxMonitorContrast.TextAlign = System.Windows.Forms.HorizontalAlignment.Center;
+            this.textBoxMonitorContrast.KeyPress += new System.Windows.Forms.KeyPressEventHandler(this.textBoxMonitorContrast_KeyPress);
             // 
             // buttonForward
             // 
