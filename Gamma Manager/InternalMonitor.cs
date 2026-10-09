@@ -18,17 +18,22 @@ namespace Gamma_Manager
             //output current brightness
             System.Management.ManagementObjectSearcher mos = new System.Management.ManagementObjectSearcher(s, q);
 
-            System.Management.ManagementObjectCollection moc = mos.Get();
-
             //store result
             byte curBrightness = 0;
-            foreach (System.Management.ManagementObject o in moc)
+            try
             {
-                curBrightness = (byte)o.GetPropertyValue("CurrentBrightness");
-                break; //only work on the first object
+                System.Management.ManagementObjectCollection moc = mos.Get();
+                foreach (System.Management.ManagementObject o in moc)
+                {
+                    curBrightness = (byte)o.GetPropertyValue("CurrentBrightness");
+                    break; //only work on the first object
+                }
+                moc.Dispose();
             }
-
-            moc.Dispose();
+            catch (Exception)
+            {
+                //WMI brightness not supported on this monitor (e.g. desktop monitor without DDC/CI)
+            }
             mos.Dispose();
 
             return (int)curBrightness;
@@ -82,15 +87,20 @@ namespace Gamma_Manager
             //output current brightness
             System.Management.ManagementObjectSearcher mos = new System.Management.ManagementObjectSearcher(s, q);
 
-            System.Management.ManagementObjectCollection moc = mos.Get();
-
-            foreach (System.Management.ManagementObject o in moc)
+            try
             {
-                o.InvokeMethod("WmiSetBrightness", new Object[] { UInt32.MaxValue, targetBrightness }); //note the reversed order - won't work otherwise!
-                break; //only work on the first object
+                System.Management.ManagementObjectCollection moc = mos.Get();
+                foreach (System.Management.ManagementObject o in moc)
+                {
+                    o.InvokeMethod("WmiSetBrightness", new Object[] { UInt32.MaxValue, targetBrightness }); //note the reversed order - won't work otherwise!
+                    break; //only work on the first object
+                }
+                moc.Dispose();
             }
-
-            moc.Dispose();
+            catch (Exception)
+            {
+                //WMI brightness not supported on this monitor
+            }
             mos.Dispose();
         }
     }
